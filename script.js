@@ -12,7 +12,7 @@ console.log('entries: ', jsonEntries);
 jsonEntries.forEach((entry) => {
   const {name, image} = entry;
   console.log(`${name}`);
-  const $ = cheerio.load(svgTemplate, {xmlMode: true});
+  const $ = cheerio.load(svgTemplate, {xmlMode: false});
   const nameElement = $('#name text');
 
   // update <text> element
