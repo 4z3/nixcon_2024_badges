@@ -88,3 +88,41 @@ async function pretixOrdersToNames() {
 
   fs.writeFileSync(filePath, output);
 });
+async function enrichNamesWithAvatarAndHandle(attendeeNames) {
+  const githubToken = process.env.GITHUB_TOKEN;
+  //TODO cut url parts from name
+  //     fetch for gitHub display names and avatars https://avatars.githubusercontent.com/<username>
+  try {
+    const enrichedAttendees = await Promise.all(attendeeNames.map(async (attendee) => {
+      if (attendee.gitHubName) {
+        // TODO: find and delete @ and paths`
+        const userUrl = `https://api.github.com/users/${attendee.gitHubName}`;
+        try {
+          const response = await axios.get(userUrl, {
+            headers: {
+              'Authorization': `token ${githubToken}`
+            }
+          });
+          const { name, avatar_url } = response.data;
+          console.log('name', name, 'git hub name', attendee.gitHubName);
+          console.log('avatar_url', avatar_url);
+          attendee.pictureUrl = avatar_url;
+          if (name) {
+            attendee.gitHubHandle = name;
+            console.log('gitHubHandle', attendee.gitHubHandle)
+          }
+
+        } catch (error) {
+          console.error(`error fetching github API for ${attendee.gitHubName}`, error.response?.data || error.message);
+          attendee.pictureUrl = dummyPic;
+        }
+      }
+      //console.log(attendee);
+      return attendee;
+    }));
+    //console.log(enrichedAttendees);
+    return enrichedAttendees;
+  } catch (error) {
+    console.error('error enrichNamesWithAvatarAndHandle:', error.message);
+  }
+};
