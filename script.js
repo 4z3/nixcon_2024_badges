@@ -1,6 +1,9 @@
-const fs = require('fs');
-const svgTemplate = fs.readFileSync('badges_a7.svg', 'utf8');
-const data = JSON.parse(fs.readFileSync('example.json'));
+import fs from 'fs';
+import { promises as fsPromises } from 'fs';
+import 'dotenv/config';
+import axios from 'axios';
+// async file operations
+const svgTemplate = await fsPromises.readFile('./badges_a7.svg', 'utf8');
 const outputDir = './output/';
 if (!fs.existsSync(outputDir)){
     fs.mkdirSync(outputDir);
