@@ -10,6 +10,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "fs": "^0.0.1-security"
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "fs.promises": "^0.1.2"
   }
 }
