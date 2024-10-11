@@ -13,16 +13,35 @@ const dummyPic = "../../../../Volumes/u267156.your-storagebox.de/illusUndArbeit/
 
 const jsonEntries = data.entries;
 console.log('entries: ', jsonEntries);
+async function getAllPretixOrdersEntries() {
+  const { ORGANIZER: organizer, EVENT: event, TOKEN: token } = process.env;
+  const url=`https://pretix.eu/api/v1/organizers/${organizer}/events/${event}/orders/`;
+  try {
+    let allOrders = [];
+    let nextUrl = url;
 
-jsonEntries.forEach((entry) => {
-  const {name, pictureUrl} = entry;
-  console.log(`${name}`);
+    // fetch paginated response
+    while (nextUrl) {
+      console.log('url:', nextUrl);
+      const response = await axios.get(nextUrl, {
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      });
 
-  const output =
-    svgTemplate
-      .replace(dummyName, name)
-      .replace(dummyPic, pictureUrl)
-      ;
+      const data = response.data
+      nextUrl = data.next;
+      allOrders = allOrders.concat(data.results);
+    }
+    return allOrders;
+  } catch (error) {
+    if (error.response) {
+      console.error('error:', error.response.status, error.response.data);
+    } else {
+      console.error('error:', error.message);
+    }
+  }
+};
 
   const fileName = `${name.replace(/\//g, '_')}.svg`;
   const filePath = `${outputDir}${fileName}`;
