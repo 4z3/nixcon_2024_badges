@@ -45,6 +45,46 @@ async function getAllPretixOrdersEntries() {
 
   const fileName = `${name.replace(/\//g, '_')}.svg`;
   const filePath = `${outputDir}${fileName}`;
+async function pretixOrdersToNames() {
+  try {
+    const data = await getAllPretixOrdersEntries();
+    const attendeeNames = data.map((x) => {
+      let name = null;
+      let gitHubName = null;
+      let gitHubHandle = null;
+      let order = x.positions;
+
+
+      for (const part of order) {
+        if (part.answers) {
+          const gitHubAnswer = part.answers?.find(answer => answer.question == 121956);
+          if (gitHubAnswer) {
+            gitHubName = gitHubAnswer.answer;
+            name = gitHubAnswer.answer;
+            break;
+          }
+        }
+        if (part.attendee_name) {
+          name = part.attendee_name;
+        }
+      }
+      if (!name) {
+        name = `order nr. ' + ${order[0].order}`;
+      }
+
+        return {
+        name,
+        gitHubName,
+        pictureUrl: dummyPic,
+      };
+    });
+  return attendeeNames;
+  } catch (error) {
+    console.error('poor error message: ', error.message);
+    throw error;
+  }
+}
+
 
   fs.writeFileSync(filePath, output);
 });
