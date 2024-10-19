@@ -10,11 +10,12 @@ if (!fs.existsSync(outputDir)){
   fs.mkdirSync(outputDir);
 }
 // dummy data
-const dummyName = "{NAME} ";
-const dummyPic = "../../../../Volumes/u267156.your-storagebox.de/illusUndArbeit/nix/nixcon_2024/avatar.jpg";
+const dummyPic = "./avatar.png"
+const dummyName = "{NAME}";
 
 // ---- functions ----
 async function getAllPretixOrdersEntries() {
+  console.log('-------getAllPretixOrdersEntries------');
   const { ORGANIZER: organizer, EVENT: event, TOKEN: token } = process.env;
   const url=`https://pretix.eu/api/v1/organizers/${organizer}/events/${event}/orders/`;
   try {
@@ -45,6 +46,7 @@ async function getAllPretixOrdersEntries() {
 };
 
 async function pretixOrdersToNames() {
+  console.log('-------pretixOrdersToNames-------');
   try {
     const data = await getAllPretixOrdersEntries();
     const attendeeNames = data.map((x) => {
@@ -85,9 +87,10 @@ async function pretixOrdersToNames() {
 }
 
 async function writeBadges() {
+  console.log('------writeBadges------');
   try {
     let attendeeNames = await pretixOrdersToNames();
-    console.log(typeof attendeeNames);
+    console.log('typeof attendeeNames: ', typeof attendeeNames);
     attendeeNames = await enrichNamesWithAvatarAndHandle(attendeeNames);
 
     await Promise.all(attendeeNames.map(async (entry) => {
@@ -96,7 +99,7 @@ async function writeBadges() {
       const displayName = gitHubHandle || gitHubName || name;
       const output =
         svgTemplate
-          .replace(dummyName, displayName) // TODO: add line break
+          .replace(dummyName, displayName)
           .replace(dummyPic, pictureUrl)
           ;
 
@@ -104,14 +107,15 @@ async function writeBadges() {
       const filePath = `${outputDir}${fileName}`;
 
       await fsPromises.writeFile(filePath, output);
+      console.log('write file: ', fileName);
       }));
   } catch (error) {
     console.error('error writing badges:', error.message);
   }
 };
 
-
 async function enrichNamesWithAvatarAndHandle(attendeeNames) {
+  console.log('-------enrichNamesWithAvatarAndHandle-------');
   const githubToken = process.env.GITHUB_TOKEN;
   //TODO cut url parts from name
   //     fetch for gitHub display names and avatars https://avatars.githubusercontent.com/<username>
@@ -126,6 +130,7 @@ async function enrichNamesWithAvatarAndHandle(attendeeNames) {
               'Authorization': `token ${githubToken}`
             }
           });
+          // TODO: get the difference between handle and display name
           const { name, avatar_url } = response.data;
           console.log('name', name, 'git hub name', attendee.gitHubName);
           console.log('avatar_url', avatar_url);
@@ -140,10 +145,9 @@ async function enrichNamesWithAvatarAndHandle(attendeeNames) {
           attendee.pictureUrl = dummyPic;
         }
       }
-      //console.log(attendee);
       return attendee;
     }));
-    //console.log(enrichedAttendees);
+    console.log("enrichedAttendees: ", enrichedAttendees);
     return enrichedAttendees;
   } catch (error) {
     console.error('error enrichNamesWithAvatarAndHandle:', error.message);
