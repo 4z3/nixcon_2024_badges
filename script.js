@@ -10,7 +10,7 @@ if (!fs.existsSync(outputDir)){
   fs.mkdirSync(outputDir);
 }
 // dummy data
-const dummyPic = "./avatar.png"
+const dummyPic = "avatar.png"
 const dummyName = "{NAME}";
 
 // ---- functions ----
