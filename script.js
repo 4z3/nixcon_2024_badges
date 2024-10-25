@@ -1,13 +1,20 @@
 import fs from 'fs';
-import { promises as fsPromises } from 'fs';
 import 'dotenv/config';
 import axios from 'axios';
 // async file operations
-const svgTemplate = await fsPromises.readFile('./badges_a7.svg', 'utf8');
-const outputDir = './output/';
+const svgTemplate = fs.readFileSync('./badges_a7.svg', { encoding: 'utf8' });
+const badgesDir = './output/badges';
+const ordersDir = './output/orders';
+const usersDir = './output/users';
 // ensure folder exists
-if (!fs.existsSync(outputDir)){
-  fs.mkdirSync(outputDir);
+if (!fs.existsSync(badgesDir)){
+  fs.mkdirSync(badgesDir, { recursive: true });
+}
+if (!fs.existsSync(ordersDir)){
+  fs.mkdirSync(ordersDir, { recursive: true });
+}
+if (!fs.existsSync(usersDir)){
+  fs.mkdirSync(usersDir, { recursive: true });
 }
 // dummy data
 const dummyPic = "avatar.png"
@@ -15,7 +22,6 @@ const dummyName = "{NAME}";
 
 // ---- functions ----
 async function getAllPretixOrdersEntries() {
-  console.log('-------getAllPretixOrdersEntries------');
   const { ORGANIZER: organizer, EVENT: event, TOKEN: token } = process.env;
   const url=`https://pretix.eu/api/v1/organizers/${organizer}/events/${event}/orders/`;
   try {
@@ -24,7 +30,7 @@ async function getAllPretixOrdersEntries() {
 
     // fetch paginated response
     while (nextUrl) {
-      console.log('url:', nextUrl);
+      console.info('url:', nextUrl);
       const response = await axios.get(nextUrl, {
         headers: {
           'Authorization': `Token ${token}`
@@ -45,45 +51,21 @@ async function getAllPretixOrdersEntries() {
   }
 };
 
-async function pretixOrdersToNames() {
-  console.log('-------pretixOrdersToNames-------');
+async function pretixOrdersToNames(allOrders) {
   try {
-    const data = await getAllPretixOrdersEntries();
-    const attendeeNames = data.map((x) => {
-      let name = null;
-      let gitHubName = null;
-      let gitHubHandle = null;
-      let order = x.positions;
-
-      for (const part of order) {
-        if (part.answers) {
-          const gitHubAnswer = part.answers?.find(answer => answer.question == 121956);
-          if (gitHubAnswer) {
-            gitHubName = sanitizeName(gitHubAnswer.answer);
-            name = gitHubAnswer.answer; // killme (after filter below is gone)
-            break;
-          }
-        }
-        if (part.attendee_name) {
-          name = part.attendee_name;
-        }
-      }
-      if (!name) {
-        name = `order nr. ' + ${order[0].order}`;
-      }
-
-        return {
-        name,
-        gitHubName,
-        pictureUrl: dummyPic,
-      };
+    const attendeeNames = allOrders.map(order => {
+      return (order.positions||[]).map(position => {
+        const gitHubAnswer = position.answers?.find(answer => answer.question == 121956);
+        const answeredGitHubName = gitHubAnswer ? sanitizeName(gitHubAnswer.answer) : null;
+        const name = gitHubAnswer?.answer || position.attendee_name || `order #${position.order}/${position.positionid}`;
+        return { name, answeredGitHubName };
+      });
     });
-  return attendeeNames
+  return attendeeNames.flat(2);
    // .filter((attendee) => {
    //   return attendee.name?.startsWith('@');
    // })
    // .slice(1)
-    ;
   } catch (error) {
     console.error('poor error message: ', error.message);
     throw error;
@@ -91,77 +73,101 @@ async function pretixOrdersToNames() {
 }
 
 function sanitizeName(name) {
-  console.log('------sanitizeName------');
   return name
     .replace(/^.*\//, '')
     .replace(/^@/, '')
     ;
 }
 
-async function writeBadges() {
-  console.log('------writeBadges------');
+async function writeBadges(attendeeNames) {
   try {
-    let attendeeNames = await pretixOrdersToNames();
-    console.log('typeof attendeeNames: ', typeof attendeeNames);
-    attendeeNames = await enrichNamesWithAvatarAndHandle(attendeeNames);
-
     await Promise.all(attendeeNames.map(async (entry) => {
       const { name, gitHubName, gitHubHandle, pictureUrl } = entry;
-      // prio: gitHubHandle > gitHubName > name
-      const displayName = gitHubHandle || gitHubName || name;
+      const displayName = gitHubName || gitHubHandle || name;
       const output =
         svgTemplate
           .replace(dummyName, displayName)
           .replace(dummyPic, pictureUrl)
           ;
 
-      const fileName = `${name.replace(/\//g, '_')}.svg`;
-      const filePath = `${outputDir}${fileName}`;
+      // TODO use unique basename (GitHub handle?) so the for-loop below isn't necessary
+      const basename = name.replace(/\//g, '_');
+      let badgePath = `${badgesDir}/${basename}.svg`;
+      for (let i = 2; fs.existsSync(badgePath); i++) {
+        badgePath = `${badgesDir}/${basename}-${i}.svg`;
+      };
 
-      await fsPromises.writeFile(filePath, output);
-      console.log('write file: ', fileName);
-      }));
+      console.info(`write badge ${badgePath} (GitHub handle: ${gitHubHandle})`);
+      fs.writeFileSync(badgePath, output);
+    }));
   } catch (error) {
     console.error('error writing badges:', error.message);
   }
 };
 
 async function enrichNamesWithAvatarAndHandle(attendeeNames) {
-  console.log('-------enrichNamesWithAvatarAndHandle-------');
-  const githubToken = process.env.GITHUB_TOKEN;
-  //TODO cut url parts from name
-  //     fetch for gitHub display names and avatars https://avatars.githubusercontent.com/<username>
   try {
-    const enrichedAttendees = await Promise.all(attendeeNames.map(async (attendee) => {
-      if (attendee.gitHubName) {
-        const userUrl = `https://api.github.com/users/${attendee.gitHubName}`;
-        try {
-          const response = await axios.get(userUrl, {
-            headers: {
-              'Authorization': `token ${githubToken}`
-            }
-          });
-          // TODO: get the difference between handle and display name
-          const { name, avatar_url } = response.data;
-          console.log('name', name, 'git hub name', attendee.gitHubName);
-          console.log('avatar_url', avatar_url);
-          attendee.pictureUrl = avatar_url;
-          if (name) {
-            attendee.gitHubHandle = name;
-            console.log('gitHubHandle', attendee.gitHubHandle)
-          }
+    return await Promise.all(attendeeNames.map(async (attendee) => {
+      const dummyData = { gitHubHandle: null, avatar_url: "" };
+      const userPath = `${usersDir}/${attendee.answeredGitHubName}.json`;
+      const userData = fs.existsSync(userPath) ? JSON.parse(fs.readFileSync(userPath)) : dummyData;
 
-        } catch (error) {
-          console.error(`error fetching github API for ${attendee.gitHubName}`, error.response?.data || error.message);
-          attendee.pictureUrl = dummyPic;
-        }
-      }
-      return attendee;
+      return {
+        ...attendee,
+        gitHubHandle: userData.login,
+        gitHubName: userData.name,
+        pictureUrl: userData.avatar_url,
+      };
     }));
-    console.log("enrichedAttendees: ", enrichedAttendees);
-    return enrichedAttendees;
   } catch (error) {
     console.error('error enrichNamesWithAvatarAndHandle:', error.message);
   }
-};
-writeBadges();
+}
+
+//TODO cut url parts from name
+//     fetch for gitHub display names and avatars https://avatars.githubusercontent.com/<username>
+async function fetchUser(gitHubName) {
+  const githubToken = process.env.GITHUB_TOKEN;
+  const userUrl = `https://api.github.com/users/${gitHubName}`;
+  const userPath = `${usersDir}/${gitHubName}.json`;
+  try {
+    console.info("fetching", userUrl);
+    const response = await axios.get(userUrl, {
+      headers: {
+        'Authorization': `token ${githubToken}`
+      }
+    });
+    console.info("write user", userPath);
+    return fs.writeFileSync(userPath, JSON.stringify(response.data));
+  } catch (error) {
+    console.error(`error fetching github API for ${gitHubName}`, error.response?.data || error.message);
+  }
+}
+
+// set to false to skip
+const doFetchOrders = true;
+const doFetchUsers = true;
+
+if (doFetchOrders) {
+  const allOrders = await getAllPretixOrdersEntries();
+  allOrders.forEach(order => {
+    const orderPath = `${ordersDir}/${order.code}.json`;
+    console.info("write order", orderPath);
+    fs.writeFileSync(orderPath, JSON.stringify(order));
+  });
+}
+
+const allOrders = fs.readdirSync(ordersDir).map(orderBasename => JSON.parse(fs.readFileSync(`${ordersDir}/${orderBasename}`, { encoding: 'utf8' })));
+console.info("order count:", allOrders.length)
+
+const attendeeNames = await pretixOrdersToNames(allOrders);
+console.info("attendee count:", attendeeNames.length)
+
+if (doFetchUsers) {
+  const gitHubNames = attendeeNames.map(attendeeName => attendeeName.answeredGitHubName).filter(gitHubName => !!gitHubName);
+  await Promise.all(gitHubNames.map(fetchUser));
+}
+
+const enrichedAttendeeNames = await enrichNamesWithAvatarAndHandle(attendeeNames);
+
+writeBadges(enrichedAttendeeNames);

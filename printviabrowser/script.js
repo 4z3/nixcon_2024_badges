@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
-const badgeFolder = '../output';
-const badges = readdirSync(badgeFolder)
+const badgesDir = '../output/badges';
+const badges = readdirSync(badgesDir);
 
 const perChunk = 8 // items per chunk
 
@@ -77,7 +77,7 @@ pages.forEach(page => {
   console.log('<div class="page">');
   page.forEach(badge => {
     console.log('<div class="badge">');
-    console.log(readFileSync(`../output/${badge}`, { encoding: 'utf8', flag: 'r' }));
+    console.log(readFileSync(`${badgesDir}/${badge}`, { encoding: 'utf8', flag: 'r' }));
     console.log('</div>');
   })
   console.log('</div>')
